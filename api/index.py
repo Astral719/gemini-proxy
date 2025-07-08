@@ -1,8 +1,6 @@
-import os
-import json
-import base64
-import requests
 from flask import Flask, request, jsonify
+import requests
+import base64
 
 # 创建Flask应用
 app = Flask(__name__)
@@ -211,11 +209,6 @@ def generate_content():
         response.status_code = 500
         response.headers.add('Access-Control-Allow-Origin', '*')
         return response
-
-# Vercel Serverless Function 入口点
-def handler(event, context):
-    """Vercel serverless function handler"""
-    return app
 
 # 如果是本地运行
 if __name__ == '__main__':
