@@ -63,26 +63,41 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error_response(401, 'Missing or invalid API Key. Please provide API key in X-API-Key, Authorization, or x-goog-api-key header')
                 return
 
-            # 验证请求数据 - 支持两种格式
+            # 验证请求数据 - 支持多种格式
             text = ''
+            model = 'gemini-1.5-flash'  # 默认模型
+            original_data = None  # 保存原始数据用于直接转发
+
             if isinstance(data, dict):
-                # 格式1: 简化格式 {"text": "消息"}
+                # 格式1: 简化格式 {"text": "消息", "model": "模型名"}
                 if 'text' in data:
                     text = data.get('text', '').strip()
+                    if 'model' in data:
+                        model = data.get('model', '').strip() or model
                 # 格式2: Gemini原始格式 {"contents": [...]}
                 elif 'contents' in data:
+                    # 如果是完整的Gemini格式，直接转发
+                    original_data = data
                     contents = data.get('contents', [])
                     if contents and isinstance(contents, list) and len(contents) > 0:
                         parts = contents[0].get('parts', [])
                         if parts and isinstance(parts, list) and len(parts) > 0:
                             text = parts[0].get('text', '').strip()
+                # 格式3: 从URL路径提取模型名 (如果客户端通过路径指定模型)
+                if hasattr(self, 'path') and '/models/' in self.path:
+                    # 提取路径中的模型名，如 /models/gemini-pro:generateContent
+                    path_parts = self.path.split('/models/')
+                    if len(path_parts) > 1:
+                        model_part = path_parts[1].split(':')[0]
+                        if model_part:
+                            model = model_part
 
             if not text:
                 self.send_error_response(400, f'Missing required field: text. Supported formats: {{"text": "message"}} or Gemini API format. Received: {str(data)[:200]}...')
                 return
 
             # 调用Gemini API
-            result = self.call_gemini_api(api_key, text)
+            result = self.call_gemini_api(api_key, text, model, original_data)
             if result['success']:
                 self.send_success_response(result['data'])
             else:
@@ -121,25 +136,29 @@ class handler(BaseHTTPRequestHandler):
 
         return None
 
-    def call_gemini_api(self, api_key, text):
+    def call_gemini_api(self, api_key, text, model='gemini-1.5-flash', original_data=None):
         """调用Gemini API"""
         try:
-            url = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
+            url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent"
             headers = {
                 "Content-Type": "application/json",
                 "x-goog-api-key": api_key,
             }
 
-            data = {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": [
-                            {"text": text}
-                        ]
-                    }
-                ]
-            }
+            # 如果有原始数据，直接使用；否则构造标准格式
+            if original_data:
+                data = original_data
+            else:
+                data = {
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": [
+                                {"text": text}
+                            ]
+                        }
+                    ]
+                }
 
             response = requests.post(url, headers=headers, json=data, timeout=30)
             response.raise_for_status()
