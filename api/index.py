@@ -1,154 +1,124 @@
-from flask import Flask, request, jsonify
-import requests
+from http.server import BaseHTTPRequestHandler
+import json
 import base64
+import requests
 
-# 创建Flask应用
-app = Flask(__name__)
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        """处理GET请求，返回API信息"""
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, x-goog-api-key')
+        self.end_headers()
 
-# 定义生成内容的模型的API地址
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
-
-# 创建会话对象，用于发送HTTP请求并保持连接池
-session = requests.Session()
-
-def extract_api_key(request_headers):
-    """从请求头中提取 Gemini API Key"""
-    # 支持多种格式的 API Key 传递方式
-    api_key = None
-
-    # 方式1: X-API-Key 头（推荐）
-    api_key = request_headers.get('X-API-Key')
-    if api_key:
-        return api_key.strip()
-
-    # 方式2: Authorization 头（Bearer token 格式）
-    auth_header = request_headers.get('Authorization')
-    if auth_header:
-        if auth_header.startswith('Bearer '):
-            return auth_header[7:].strip()
-        else:
-            return auth_header.strip()
-
-    # 方式3: x-goog-api-key 头（与 Gemini 官方格式一致）
-    api_key = request_headers.get('x-goog-api-key')
-    if api_key:
-        return api_key.strip()
-
-    return None
-
-def validate_api_key(api_key):
-    """验证 API Key 格式是否合理"""
-    if not api_key:
-        return False
-
-    # 基本格式检查
-    if len(api_key) < 10:  # API Key 通常比较长
-        return False
-
-    # 检查是否包含明显的占位符
-    invalid_keys = ['YOUR_TOKEN', 'YOUR_API_KEY', 'your_api_key_here', 'test', 'demo']
-    if api_key.lower() in [key.lower() for key in invalid_keys]:
-        return False
-
-    return True
-
-def handle_cors():
-    """处理CORS预检请求"""
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': 'ok'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-API-Key,x-goog-api-key')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        return response
-    return None
-
-def add_cors_headers(response):
-    """为所有响应添加CORS头"""
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-API-Key,x-goog-api-key')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-    return response
-
-@app.route('/', methods=['GET', 'POST', 'OPTIONS'])
-@app.route('/api', methods=['GET', 'POST', 'OPTIONS'])
-@app.route('/api/', methods=['GET', 'POST', 'OPTIONS'])
-def generate_content():
-    try:
-        # 处理CORS预检请求
-        cors_response = handle_cors()
-        if cors_response:
-            return cors_response
-
-        # 处理GET请求，返回API信息
-        if request.method == 'GET':
-            response = jsonify({
-                'name': 'Gemini Proxy API',
-                'description': 'Reverse proxy for Google Gemini Pro API - Client provides API Key',
-                'version': '2.0.0',
-                'endpoints': {
-                    'POST /': 'Generate content using Gemini Pro',
-                    'POST /api': 'Generate content using Gemini Pro'
+        response_data = {
+            'name': 'Gemini Proxy API',
+            'description': 'Reverse proxy for Google Gemini Pro API - Client provides API Key',
+            'version': '2.0.0',
+            'status': 'Working! 🎉',
+            'endpoints': {
+                'POST /': 'Generate content using Gemini Pro',
+                'GET /': 'Get API information'
+            },
+            'usage': {
+                'method': 'POST',
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': 'your-gemini-api-key'
                 },
-                'usage': {
-                    'method': 'POST',
-                    'headers': {
-                        'Content-Type': 'application/json',
-                        'X-API-Key': 'your-gemini-api-key'
-                    },
-                    'alternative_headers': {
-                        'Authorization': 'Bearer your-gemini-api-key',
-                        'x-goog-api-key': 'your-gemini-api-key'
-                    },
-                    'body': {
-                        'text': 'Your prompt here'
-                    }
-                },
-                'features': [
-                    '✅ 客户端提供自己的 Gemini API Key',
-                    '✅ 服务器不存储任何 API Key',
-                    '✅ 支持多种 API Key 传递方式',
-                    '✅ 完整的 CORS 支持',
-                    '✅ Base64 编码响应'
-                ],
-                'security': '🔒 您的 API Key 仅用于转发请求，不会被存储或记录'
-            })
-            return add_cors_headers(response)
+                'body': {
+                    'text': 'Your prompt here'
+                }
+            },
+            'features': [
+                '✅ 客户端提供自己的 Gemini API Key',
+                '✅ 服务器不存储任何 API Key',
+                '✅ 支持多种 API Key 传递方式',
+                '✅ 完整的 CORS 支持',
+                '✅ Base64 编码响应'
+            ]
+        }
 
-        # 处理POST请求
-        if request.method == 'POST':
-            # 从请求头中提取 Gemini API Key
-            api_key = extract_api_key(request.headers)
+        self.wfile.write(json.dumps(response_data, ensure_ascii=False, indent=2).encode('utf-8'))
 
-            # 验证 API Key
-            if not validate_api_key(api_key):
-                response = jsonify({
-                    'error': 'Invalid API Key',
-                    'message': 'Please provide a valid Gemini API Key in headers',
-                    'supported_headers': [
-                        'X-API-Key: your-gemini-api-key',
-                        'Authorization: Bearer your-gemini-api-key',
-                        'x-goog-api-key: your-gemini-api-key'
-                    ]
-                })
-                response.status_code = 401
-                return add_cors_headers(response)
+    def do_POST(self):
+        """处理POST请求，转发到Gemini API"""
+        try:
+            # 读取请求体
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
 
-            # 从请求体中提取文本
-            if not request.is_json:
-                response = jsonify({'error': 'Bad Request', 'message': 'Content-Type must be application/json'})
-                response.status_code = 400
-                return add_cors_headers(response)
+            # 解析JSON数据
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+            except json.JSONDecodeError:
+                self.send_error_response(400, 'Invalid JSON format')
+                return
 
-            data = request.get_json()
-            text = data.get('text', '') if data else ''
+            # 提取API Key
+            api_key = self.extract_api_key()
+            if not api_key:
+                self.send_error_response(401, 'Missing or invalid API Key')
+                return
 
+            # 验证请求数据
+            text = data.get('text', '').strip()
             if not text:
-                response = jsonify({'error': 'Bad Request', 'message': 'Missing required field: text'})
-                response.status_code = 400
-                return add_cors_headers(response)
+                self.send_error_response(400, 'Missing required field: text')
+                return
 
-            # 准备用于POST请求的数据
-            gemini_data = {
+            # 调用Gemini API
+            result = self.call_gemini_api(api_key, text)
+            if result['success']:
+                self.send_success_response(result['data'])
+            else:
+                self.send_error_response(result['status_code'], result['message'])
+
+        except Exception as e:
+            self.send_error_response(500, f'Internal server error: {str(e)}')
+
+    def do_OPTIONS(self):
+        """处理CORS预检请求"""
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-API-Key, x-goog-api-key')
+        self.end_headers()
+
+    def extract_api_key(self):
+        """从请求头中提取API Key"""
+        # 方式1: X-API-Key
+        api_key = self.headers.get('X-API-Key')
+        if api_key:
+            return api_key.strip()
+
+        # 方式2: Authorization Bearer
+        auth_header = self.headers.get('Authorization')
+        if auth_header:
+            if auth_header.startswith('Bearer '):
+                return auth_header[7:].strip()
+            else:
+                return auth_header.strip()
+
+        # 方式3: x-goog-api-key
+        api_key = self.headers.get('x-goog-api-key')
+        if api_key:
+            return api_key.strip()
+
+        return None
+
+    def call_gemini_api(self, api_key, text):
+        """调用Gemini API"""
+        try:
+            url = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key,
+            }
+
+            data = {
                 "contents": [
                     {
                         "role": "user",
@@ -159,60 +129,67 @@ def generate_content():
                 ]
             }
 
-            # 准备请求头，使用客户端提供的 API Key
-            headers = {
-                "Content-Type": "application/json",
-                "x-goog-api-key": api_key,
-            }
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            response.raise_for_status()
 
-            # 发送请求到Gemini API
-            gemini_response = session.post(GEMINI_API_URL, headers=headers, json=gemini_data)
-            gemini_response.raise_for_status()
-            
-            result = gemini_response.json()
-            
+            result = response.json()
+
             # 提取生成的内容
             if 'candidates' in result and len(result['candidates']) > 0:
                 candidate = result['candidates'][0]
                 if 'content' in candidate and 'parts' in candidate['content'] and len(candidate['content']['parts']) > 0:
                     content_text = candidate['content']['parts'][0].get('text', '')
-                    
-                    # 对内容进行Base64编码
+
+                    # Base64编码
                     encoded_content = base64.b64encode(content_text.encode()).decode()
-                    
-                    response = jsonify({
+
+                    return {
                         'success': True,
-                        'content': encoded_content,
-                        'original_length': len(content_text)
-                    })
-                    response.headers.add('Access-Control-Allow-Origin', '*')
-                    return response
-                else:
-                    response = jsonify({'error': 'API Error', 'message': 'No content generated'})
-                    response.status_code = 500
-                    response.headers.add('Access-Control-Allow-Origin', '*')
-                    return response
-            else:
-                response = jsonify({'error': 'API Error', 'message': 'No candidates returned'})
-                response.status_code = 500
-                response.headers.add('Access-Control-Allow-Origin', '*')
-                return response
+                        'data': {
+                            'success': True,
+                            'content': encoded_content,
+                            'original_length': len(content_text)
+                        }
+                    }
 
-    except requests.exceptions.RequestException as e:
-        # 处理网络请求错误
-        app.logger.error(f"Request error: {e}")
-        response = jsonify({'error': 'External API Error', 'message': str(e)})
-        response.status_code = 502
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
-    except Exception as e:
-        # 记录异常并返回错误响应
-        app.logger.error(f"Error processing request: {e}")
-        response = jsonify({'error': 'Internal Server Error', 'message': str(e)})
-        response.status_code = 500
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
+            return {
+                'success': False,
+                'status_code': 500,
+                'message': 'No content generated by Gemini API'
+            }
 
-# 如果是本地运行
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000, debug=True)
+        except requests.exceptions.RequestException as e:
+            return {
+                'success': False,
+                'status_code': 502,
+                'message': f'Gemini API request failed: {str(e)}'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'status_code': 500,
+                'message': f'Unexpected error: {str(e)}'
+            }
+
+    def send_success_response(self, data):
+        """发送成功响应"""
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+        self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+
+    def send_error_response(self, status_code, message):
+        """发送错误响应"""
+        self.send_response(status_code)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+        error_data = {
+            'error': 'API Error',
+            'message': message
+        }
+
+        self.wfile.write(json.dumps(error_data, ensure_ascii=False).encode('utf-8'))
