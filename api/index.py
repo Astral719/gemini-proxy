@@ -53,20 +53,20 @@ class handler(BaseHTTPRequestHandler):
             # 解析JSON数据
             try:
                 data = json.loads(post_data.decode('utf-8'))
-            except json.JSONDecodeError:
-                self.send_error_response(400, 'Invalid JSON format')
+            except json.JSONDecodeError as e:
+                self.send_error_response(400, f'Invalid JSON format: {str(e)}. Received data: {post_data.decode("utf-8", errors="ignore")[:100]}')
                 return
 
             # 提取API Key
             api_key = self.extract_api_key()
             if not api_key:
-                self.send_error_response(401, 'Missing or invalid API Key')
+                self.send_error_response(401, 'Missing or invalid API Key. Please provide API key in X-API-Key, Authorization, or x-goog-api-key header')
                 return
 
             # 验证请求数据
-            text = data.get('text', '').strip()
+            text = data.get('text', '').strip() if isinstance(data, dict) else ''
             if not text:
-                self.send_error_response(400, 'Missing required field: text')
+                self.send_error_response(400, f'Missing required field: text. Received data: {data}')
                 return
 
             # 调用Gemini API
