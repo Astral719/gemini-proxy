@@ -7,24 +7,52 @@ from flask import Flask, request, jsonify
 # 创建Flask应用
 app = Flask(__name__)
 
-# 从环境变量获取配置
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'YOUR_TOKEN')
-SECRET_KEY = os.environ.get('SECRET_KEY', 'YOUR_SECRET_KEY')
-
-# 定义生成内容的模型的API地址和请求头信息
+# 定义生成内容的模型的API地址
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
 
 # 创建会话对象，用于发送HTTP请求并保持连接池
 session = requests.Session()
 
-def verify_token(token):
-    """验证令牌的函数"""
-    if not token:
+def extract_api_key(request_headers):
+    """从请求头中提取 Gemini API Key"""
+    # 支持多种格式的 API Key 传递方式
+    api_key = None
+
+    # 方式1: X-API-Key 头（推荐）
+    api_key = request_headers.get('X-API-Key')
+    if api_key:
+        return api_key.strip()
+
+    # 方式2: Authorization 头（Bearer token 格式）
+    auth_header = request_headers.get('Authorization')
+    if auth_header:
+        if auth_header.startswith('Bearer '):
+            return auth_header[7:].strip()
+        else:
+            return auth_header.strip()
+
+    # 方式3: x-goog-api-key 头（与 Gemini 官方格式一致）
+    api_key = request_headers.get('x-goog-api-key')
+    if api_key:
+        return api_key.strip()
+
+    return None
+
+def validate_api_key(api_key):
+    """验证 API Key 格式是否合理"""
+    if not api_key:
         return False
-    # 移除 Bearer 前缀（如果存在）
-    if token.startswith('Bearer '):
-        token = token[7:]
-    return token == SECRET_KEY
+
+    # 基本格式检查
+    if len(api_key) < 10:  # API Key 通常比较长
+        return False
+
+    # 检查是否包含明显的占位符
+    invalid_keys = ['YOUR_TOKEN', 'YOUR_API_KEY', 'your_api_key_here', 'test', 'demo']
+    if api_key.lower() in [key.lower() for key in invalid_keys]:
+        return False
+
+    return True
 
 def handle_cors():
     """处理CORS预检请求"""
@@ -50,8 +78,8 @@ def generate_content():
         if request.method == 'GET':
             response = jsonify({
                 'name': 'Gemini Proxy API',
-                'description': 'Reverse proxy for Google Gemini Pro API',
-                'version': '1.0.0',
+                'description': 'Reverse proxy for Google Gemini Pro API - Client provides API Key',
+                'version': '2.0.0',
                 'endpoints': {
                     'POST /': 'Generate content using Gemini Pro',
                     'POST /api': 'Generate content using Gemini Pro'
@@ -60,24 +88,44 @@ def generate_content():
                     'method': 'POST',
                     'headers': {
                         'Content-Type': 'application/json',
-                        'Authorization': 'your-secret-key'
+                        'X-API-Key': 'your-gemini-api-key'
+                    },
+                    'alternative_headers': {
+                        'Authorization': 'Bearer your-gemini-api-key',
+                        'x-goog-api-key': 'your-gemini-api-key'
                     },
                     'body': {
                         'text': 'Your prompt here'
                     }
-                }
+                },
+                'features': [
+                    '✅ 客户端提供自己的 Gemini API Key',
+                    '✅ 服务器不存储任何 API Key',
+                    '✅ 支持多种 API Key 传递方式',
+                    '✅ 完整的 CORS 支持',
+                    '✅ Base64 编码响应'
+                ],
+                'security': '🔒 您的 API Key 仅用于转发请求，不会被存储或记录'
             })
             response.headers.add('Access-Control-Allow-Origin', '*')
             return response
 
         # 处理POST请求
         if request.method == 'POST':
-            # 从请求头中获取令牌
-            token = request.headers.get('Authorization')
+            # 从请求头中提取 Gemini API Key
+            api_key = extract_api_key(request.headers)
 
-            # 验证令牌
-            if not verify_token(token):
-                response = jsonify({'error': 'Unauthorized', 'message': 'Invalid or missing authorization token'})
+            # 验证 API Key
+            if not validate_api_key(api_key):
+                response = jsonify({
+                    'error': 'Invalid API Key',
+                    'message': 'Please provide a valid Gemini API Key in headers',
+                    'supported_headers': [
+                        'X-API-Key: your-gemini-api-key',
+                        'Authorization: Bearer your-gemini-api-key',
+                        'x-goog-api-key: your-gemini-api-key'
+                    ]
+                })
                 response.status_code = 401
                 response.headers.add('Access-Control-Allow-Origin', '*')
                 return response
@@ -110,10 +158,10 @@ def generate_content():
                 ]
             }
 
-            # 准备请求头
+            # 准备请求头，使用客户端提供的 API Key
             headers = {
                 "Content-Type": "application/json",
-                "x-goog-api-key": GEMINI_API_KEY,
+                "x-goog-api-key": api_key,
             }
 
             # 发送请求到Gemini API
