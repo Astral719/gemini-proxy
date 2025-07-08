@@ -96,6 +96,11 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error_response(400, f'Missing required field: text. Supported formats: {{"text": "message"}} or Gemini API format. Received: {str(data)[:200]}...')
                 return
 
+            # 验证 API Key 格式
+            if not api_key or len(api_key) < 20:
+                self.send_error_response(401, f'Invalid API Key format. Length: {len(api_key) if api_key else 0}')
+                return
+
             # 调用Gemini API
             result = self.call_gemini_api(api_key, text, model, original_data)
             if result['success']:
@@ -196,6 +201,9 @@ class handler(BaseHTTPRequestHandler):
             print(f"DEBUG: Response status: {response.status_code}")
             if response.status_code != 200:
                 print(f"DEBUG: Response text: {response.text}")
+                print(f"DEBUG: Request headers: {headers}")
+                print(f"DEBUG: API Key length: {len(api_key) if api_key else 'None'}")
+                print(f"DEBUG: API Key starts with: {api_key[:10] if api_key else 'None'}...")
 
             response.raise_for_status()
 
