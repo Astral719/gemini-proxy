@@ -212,13 +212,10 @@ def generate_content():
         response.headers.add('Access-Control-Allow-Origin', '*')
         return response
 
-# Vercel 需要的处理函数
-def handler(request):
+# Vercel Serverless Function 入口点
+def handler(event, context):
     """Vercel serverless function handler"""
-    with app.test_request_context(request.url, method=request.method, 
-                                  headers=dict(request.headers), 
-                                  data=request.get_data()):
-        return app.full_dispatch_request()
+    return app
 
 # 如果是本地运行
 if __name__ == '__main__':
