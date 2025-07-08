@@ -57,10 +57,17 @@ def handle_cors():
     if request.method == 'OPTIONS':
         response = jsonify({'status': 'ok'})
         response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-API-Key,x-goog-api-key')
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
         return response
     return None
+
+def add_cors_headers(response):
+    """为所有响应添加CORS头"""
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-API-Key,x-goog-api-key')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
 @app.route('/', methods=['GET', 'POST', 'OPTIONS'])
 @app.route('/api', methods=['GET', 'POST', 'OPTIONS'])
@@ -105,8 +112,7 @@ def generate_content():
                 ],
                 'security': '🔒 您的 API Key 仅用于转发请求，不会被存储或记录'
             })
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            return response
+            return add_cors_headers(response)
 
         # 处理POST请求
         if request.method == 'POST':
@@ -125,15 +131,13 @@ def generate_content():
                     ]
                 })
                 response.status_code = 401
-                response.headers.add('Access-Control-Allow-Origin', '*')
-                return response
+                return add_cors_headers(response)
 
             # 从请求体中提取文本
             if not request.is_json:
                 response = jsonify({'error': 'Bad Request', 'message': 'Content-Type must be application/json'})
                 response.status_code = 400
-                response.headers.add('Access-Control-Allow-Origin', '*')
-                return response
+                return add_cors_headers(response)
 
             data = request.get_json()
             text = data.get('text', '') if data else ''
@@ -141,8 +145,7 @@ def generate_content():
             if not text:
                 response = jsonify({'error': 'Bad Request', 'message': 'Missing required field: text'})
                 response.status_code = 400
-                response.headers.add('Access-Control-Allow-Origin', '*')
-                return response
+                return add_cors_headers(response)
 
             # 准备用于POST请求的数据
             gemini_data = {
