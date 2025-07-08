@@ -63,10 +63,22 @@ class handler(BaseHTTPRequestHandler):
                 self.send_error_response(401, 'Missing or invalid API Key. Please provide API key in X-API-Key, Authorization, or x-goog-api-key header')
                 return
 
-            # 验证请求数据
-            text = data.get('text', '').strip() if isinstance(data, dict) else ''
+            # 验证请求数据 - 支持两种格式
+            text = ''
+            if isinstance(data, dict):
+                # 格式1: 简化格式 {"text": "消息"}
+                if 'text' in data:
+                    text = data.get('text', '').strip()
+                # 格式2: Gemini原始格式 {"contents": [...]}
+                elif 'contents' in data:
+                    contents = data.get('contents', [])
+                    if contents and isinstance(contents, list) and len(contents) > 0:
+                        parts = contents[0].get('parts', [])
+                        if parts and isinstance(parts, list) and len(parts) > 0:
+                            text = parts[0].get('text', '').strip()
+
             if not text:
-                self.send_error_response(400, f'Missing required field: text. Received data: {data}')
+                self.send_error_response(400, f'Missing required field: text. Supported formats: {{"text": "message"}} or Gemini API format. Received: {str(data)[:200]}...')
                 return
 
             # 调用Gemini API
