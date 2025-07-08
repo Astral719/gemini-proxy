@@ -139,6 +139,18 @@ class handler(BaseHTTPRequestHandler):
     def call_gemini_api(self, api_key, text, model='gemini-1.5-flash', original_data=None):
         """调用Gemini API"""
         try:
+            # 验证模型名称
+            valid_models = [
+                'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite-preview-06-17',
+                'gemini-2.0-flash', 'gemini-2.0-flash-lite',
+                'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-8b',
+                'gemini-pro', 'gemini-pro-vision'  # 旧版本兼容
+            ]
+
+            # 如果模型不在列表中，尝试使用默认模型
+            if model not in valid_models:
+                print(f"WARNING: Model '{model}' not in known valid models. Using gemini-1.5-flash as fallback.")
+                model = 'gemini-1.5-flash'
             url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent"
             headers = {
                 "Content-Type": "application/json",
@@ -160,7 +172,18 @@ class handler(BaseHTTPRequestHandler):
                     ]
                 }
 
+            # 添加调试信息
+            print(f"DEBUG: Calling Gemini API with model: {model}")
+            print(f"DEBUG: URL: {url}")
+            print(f"DEBUG: Data: {str(data)[:200]}...")
+
             response = requests.post(url, headers=headers, json=data, timeout=30)
+
+            # 添加响应调试信息
+            print(f"DEBUG: Response status: {response.status_code}")
+            if response.status_code != 200:
+                print(f"DEBUG: Response text: {response.text}")
+
             response.raise_for_status()
 
             result = response.json()
