@@ -139,17 +139,30 @@ class handler(BaseHTTPRequestHandler):
     def call_gemini_api(self, api_key, text, model='gemini-1.5-flash', original_data=None):
         """调用Gemini API"""
         try:
-            # 验证模型名称
-            valid_models = [
-                'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite-preview-06-17',
-                'gemini-2.0-flash', 'gemini-2.0-flash-lite',
-                'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-8b',
-                'gemini-pro', 'gemini-pro-vision'  # 旧版本兼容
+            # 模型名称映射和验证
+            model_mapping = {
+                # 新模型映射到确实可用的模型
+                'gemini-2.5-pro': 'gemini-1.5-pro',  # 映射到可用模型
+                'gemini-2.5-flash': 'gemini-1.5-flash',  # 映射到可用模型
+                'gemini-2.0-flash': 'gemini-1.5-flash',  # 映射到可用模型
+                'gemini-pro': 'gemini-1.5-pro',  # 旧版本兼容
+                'gemini-pro-vision': 'gemini-1.5-pro',  # 旧版本兼容
+            }
+
+            # 确实可用的模型列表
+            verified_models = [
+                'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'
             ]
 
-            # 如果模型不在列表中，尝试使用默认模型
-            if model not in valid_models:
-                print(f"WARNING: Model '{model}' not in known valid models. Using gemini-1.5-flash as fallback.")
+            # 应用模型映射
+            if model in model_mapping:
+                original_model = model
+                model = model_mapping[model]
+                print(f"INFO: Mapping model '{original_model}' to '{model}'")
+
+            # 如果模型仍然不在验证列表中，使用默认模型
+            if model not in verified_models:
+                print(f"WARNING: Model '{model}' not verified. Using gemini-1.5-flash as fallback.")
                 model = 'gemini-1.5-flash'
             url = f"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent"
             headers = {
